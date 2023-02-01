@@ -1,7 +1,7 @@
 {
-  "name": "reelgood",
+  "name": "all-brit-wiki",
   "version": "1.0.0",
-  "description": "reelgood scraper",
+  "description": "all-brit-wiki scraper",
   "main": "main.js",
   "type": "module",
   "scripts": {
