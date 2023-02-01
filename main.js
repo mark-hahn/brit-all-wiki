@@ -5,27 +5,25 @@ import {escape} from 'querystring';
 
 const useStoredHome = (process.argv[2] === 'useStoredHome');
 
-const rx_show      = new RegExp('"show:.*?:@global": ?{(.*?)}',          'sg');
-const rx_title     = new RegExp('"title": ?"(.*?)"',                     's');
-const rx_slug      = new RegExp('"slug": ?"(.*?)"',                      's');
-const rx_genre     = new RegExp('Lozenge .*? href="/tv/genre/.*?>(.*?)<','sg');
+//<ul><li><i><a href="/wiki/House_(TV_series)" title="House (TV series)">House</a></i></li>
+//<li><i><a href="/wiki/Royal_Pains" title="Royal Pains">Royal Pains</a></i></li>
+
+const rx_show = 
+    new RegExp('<li><i><a href="/wiki/.*?" title="(.*?)">', 'sg');
 
 const oldShows = JSON.parse(fs.readFileSync("oldShows.json"));
 
-// const homeUrl = "https://reelgood.com/tv";
-const homeUrl = "https://reelgood.com/new/tv";
-// const homeUrl = "https://reelgood.com/tv/browse/new-tv-on-your-sources";
-// const homeUrl = "https://reelgood.com/tv?filter-sort=3"; // sort by release date
+const homeUrl = "https://en.wikipedia.org/wiki/List_of_British_television_programmes";
 
 let homeHtml;
 if(!useStoredHome) {
-  console.log('fetching a fresh reelgood home page');
+  console.log('fetching a fresh wiki page');
   const homeData = await fetch(homeUrl);
   homeHtml = await homeData.text();
   fs.writeFileSync("home.html", homeHtml);
 }
 else {
-  console.log('using stored reelgood home page');
+  console.log('using stored wiki home page');
   homeHtml = fs.readFileSync("home.html");
 }
 
@@ -35,34 +33,38 @@ else {
   showLoop:
   while((show = rx_show.exec(homeHtml)) !== null) {
 
-    const titleMatches = rx_title.exec(show);
-    if(!titleMatches?.length) continue showLoop;
+    const titleTVseries = unEscape(show[1]);
 
-    const title = titleMatches[1];
+    const title = titleTVseries.replace(/ \(TV series\)/, '');
+
     if(title in oldShows) continue showLoop;
     
+    console.log({title});
+
     oldShows[title] = true;
     fs.writeFileSync("oldShows.json", JSON.stringify(oldShows));
 
-    console.log('\n'+title);
+    const showUrl = 
+      `https://en.wikipedia.org/wiki/${title.replace(/ /g, '_')}_(TV_series)`;
 
-    const slugMatches = rx_slug.exec(show);
-    const slug        = slugMatches[1];
-    const showUrl     = `https://reelgood.com/show/${slug}`;
+    console.log(`opening ${showUrl}`);
+    open(showUrl);
 
-    let reelData;
+    break;
+
+    let wikiData;
     try {
-      reelData = await fetch(showUrl);
+      wikiData = await fetch(showUrl);
     }
     catch(e) {
-      console.log(e+'\n'+'\n');
+      console.log(e.message + '\n\n');
       process.exit();
     }
 
-    const reelHtml = await reelData.text();
+    const showHtml = await wikiData.text();
     let genreMatches;
     rx_genre.lastIndex = 0;
-    while((genreMatches = rx_genre.exec(reelHtml)) !== null) {
+    while((genreMatches = rx_genre.exec(showHtml)) !== null) {
       const genre = genreMatches[1];
       if( genre === 'Anime'               ||
           genre === 'Biography'           ||
@@ -84,17 +86,8 @@ else {
       }
     }
 
-    const imbdUrl = `https://www.imdb.com/find/?q=${escape(title)}`;
-    const wikiUrl = `https://en.wikipedia.org/wiki/` +
-                       `${title.replace(/ /g, '_')}%20(TV%20Series)`;
-    const googleUrl  = `https://www.google.com/search?q=%22` +
-                       `${title.replace(/ /g, '+')}%22+wiki+tv+show`;
-
-    fs.writeFileSync("links.txt", 
-      'USESTOREDHOME COMMAND: run useStoredHome\n\n');
-    fs.appendFileSync("links.txt", imbdUrl+'\n');
-    fs.appendFileSync("links.txt", wikiUrl+'\n');
-    fs.appendFileSync("links.txt", googleUrl+'\n');
+    fs.writeFileSync("links.txt", 'run useStoredHome\n\n');
+    fs.appendFileSync("links.txt", showUrl+'\n');
 
     console.log(`opening ${showUrl}`);
     open(showUrl);
@@ -102,3 +95,12 @@ else {
     break;
   }
 })()
+
+function unEscape(htmlStr) {
+  htmlStr = htmlStr.replace(/&lt;/g,  '<');	 
+  htmlStr = htmlStr.replace(/&gt;/g,  '>');     
+  htmlStr = htmlStr.replace(/&quot;/g,'"');  
+  htmlStr = htmlStr.replace(/&#39;/g, "'");   
+  htmlStr = htmlStr.replace(/&amp;/g, '&');
+  return htmlStr;
+}
