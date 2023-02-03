@@ -5,10 +5,8 @@ import {escape} from 'querystring';
 
 const useStoredHome = (process.argv[2] === 'useStoredHome');
 
-//<ul><li><i><a href="/wiki/House_(TV_series)" title="House (TV series)">House</a></i></li>
-//<li><i><a href="/wiki/Royal_Pains" title="Royal Pains">Royal Pains</a></i></li>
-
-const rx_show     = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
+const rx_show    = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
+const rx_series  = new RegExp(`for="_blank">TV Series</label>`,'sg');
 
 const oldShows = JSON.parse(fs.readFileSync("oldShows.json"));
 const oldLinks = JSON.parse(fs.readFileSync("oldLinks.json"));
@@ -36,38 +34,57 @@ else {
 
     const titleTVseries = unEscape(show[1]);
     const title = titleTVseries.replace(/ \(TV series\)/, '');
-
     if(title in oldShows) continue showLoop;
 
     console.log({title});
+
+    const rx_relLink = 
+        new RegExp(`href="(/title/tt[^"]*)">${title}</a>`,'sg');
 
     const imdbSearchUrl = 
       `https://www.imdb.com/find/?q=${escape(title)}&ref_=nv_sr_sm`;
     
     console.log('fetching imdb search results page');
-    const imdbData = await fetch(imdbSearchUrl);
-    const imdbHtml = await imdbData.text();
+    const imdbSrchResData = await fetch(imdbSearchUrl);
+    const imdbSrchResHtml = await imdbSrchResData.text();
 
-    fs.writeFileSync('imdbHtml.html', imdbHtml);
+    fs.writeFileSync('imdbSrchResHtml.html', imdbSrchResHtml);
 
-    const rx_imdbCode = 
-            new RegExp(`href="(/title/tt[^"]*)">${title}</a>`,'sg');
-
-    rx_imdbCode.lastIndex = 0;
+    const links = [];
+    rx_relLink.lastIndex = 0;
     let imdbCodeGroups;
-    rx_imdbCodeLoop:
-    while((imdbCodeGroups = rx_imdbCode.exec(imdbHtml)) !== null) {
+    while((imdbCodeGroups = rx_relLink.exec(imdbSrchResHtml)) !== null) {
       const relLink = imdbCodeGroups[1];
-      if(relLink in oldLinks) continue;
-
-      oldLinks[relLink] = true;
-      fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
-
-      const link = 'https://www.imdb.com' + relLink;
-      console.log('opening link:', link);
-      open(link);
-      return;
+      const linkIdx = rx_relLink.lastIndex;
+      links.push({linkIdx, relLink});
     }
+
+    console.log(links);
+
+    for(let linkIdx = 0; linkIdx < links.length; linkIdx++) {
+      const linkData = links[linkIdx];
+
+      rx_series.lastIndex = linkData.linkIdx;
+      const seriesGroups = rx_series.exec(imdbSrchResHtml);
+      if(seriesGroups) {
+        const seriesIdx = rx_series.lastIndex;
+        const nextLinkIdx = 
+                (linkIdx < links.length-1 ? links[linkIdx+1].linkIdx : 1e9);
+        if(seriesIdx < nextLinkIdx) {
+          const relLink = linkData.relLink;
+          if(relLink in oldLinks) continue;
+          
+          oldLinks[relLink] = true;
+          fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
+
+          const link = 'https://www.imdb.com' + relLink;
+          console.log('opening link:', link);
+          open(link);
+          return;
+        }
+      }
+    }
+    return;
 
     oldShows[title] = true;
     // fs.writeFileSync("oldShows.json", JSON.stringify(oldShows));
