@@ -73,9 +73,12 @@ else {
         if(seriesIdx < nextLinkIdx) {
           const relLink = linkData.relLink;
           if(relLink in oldLinks) continue;
-          
+
           oldLinks[relLink] = true;
           fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
+
+
+          
 
           const link = 'https://www.imdb.com' + relLink;
           console.log('opening link:', link);
