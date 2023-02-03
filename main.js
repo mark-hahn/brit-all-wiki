@@ -7,6 +7,7 @@ const useStoredHome = (process.argv[2] === 'useStoredHome');
 
 const rx_show    = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
 const rx_series  = new RegExp(`for="_blank">TV Series</label>`,'sg');
+const rx_dev     = new RegExp(`>In development: More at IMDbPro<`,'sg');
 
 const oldShows = JSON.parse(fs.readFileSync("oldShows.json"));
 const oldLinks = JSON.parse(fs.readFileSync("oldLinks.json"));
@@ -70,19 +71,31 @@ else {
         const seriesIdx = rx_series.lastIndex;
         const nextLinkIdx = 
                 (linkIdx < links.length-1 ? links[linkIdx+1].linkIdx : 1e9);
-        if(seriesIdx < nextLinkIdx) {
+        if(seriesIdx >= nextLinkIdx) {
+          console.log('skipping link, not a tv-series');
+          continue;
+        }
+        else {
           const relLink = linkData.relLink;
           if(relLink in oldLinks) continue;
 
           oldLinks[relLink] = true;
           fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
 
-
+          const detailUrl = 'https://www.imdb.com' + relLink;
+          console.log('fetching imdb detailed series page:', detailUrl);
+          const imdbDetailResData = await fetch(detailUrl);
+          const imdbDetailHtml = await imdbDetailResData.text();
           
+          if(rx_dev.test(imdbDetailHtml)) {
+            console.log('skipping link, in development');
+            continue;
+          }
 
-          const link = 'https://www.imdb.com' + relLink;
-          console.log('opening link:', link);
-          open(link);
+          fs.writeFileSync('imdbDetailHtml.html', imdbDetailHtml);
+          
+          console.log('opening detailed series page in browser:', detailUrl);
+          open(detailUrl);
           return;
         }
       }
