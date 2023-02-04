@@ -12,7 +12,6 @@ const rx_proc    = new RegExp(`Procedural drama`,'sg');
 const rx_genre   = new RegExp(`<span class="ipc-chip__text">(.*?)</span>`,'sg');
 
 const oldShows = JSON.parse(fs.readFileSync("oldShows.json"));
-const oldLinks = JSON.parse(fs.readFileSync("oldLinks.json"));
 
 const homeUrl = 
       "https://en.wikipedia.org/wiki/List_of_British_television_programmes";
@@ -40,7 +39,6 @@ else {
     const titleTVseries = unEscape(show[1]);
     const title = titleTVseries.replace(/ \(.*?\)$/i, '');
 
-    // console.log(title);
     if(title in oldShows) continue;
 
     oldShows[title] = true;
@@ -54,7 +52,6 @@ else {
     const searchUrl = 
       `https://www.imdb.com/find/?q=${escape(title)}&ref_=nv_sr_sm`;
     
-    // console.log('fetching imdb search results page');
     const searchResData = await fetch(searchUrl);
     const searchHtml    = await searchResData.text();
 
@@ -78,34 +75,25 @@ else {
     }
 
     if(links.length == 0) {
-        console.log('skipping title, no link\n' + searchUrl);
-        return;
+        console.log('skipping title, no link');
         continue;
     }
-    // console.log(links);
 
 linkloop:
     for(let linkIdx = 0; linkIdx < links.length; linkIdx++) {
       const linkData = links[linkIdx];
-      const relLink = linkData.relLink;
-      if(relLink in oldLinks) continue;
-
-      oldLinks[relLink] = true;
-      fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
-
+      const relLink  = linkData.relLink;
 
 ///////////////////////  FILTERS  /////////////////////
 
       const detailUrl = 'https://www.imdb.com' + relLink;
-      // console.log('fetching detailed series page:', detailUrl);
       const detailResData = await fetch(detailUrl);
       const detailHtml    = await detailResData.text();
       
       fs.writeFileSync('dbg-detail.html', detailHtml);
 
       if(!/tv series/igs.test(detailHtml)) {
-        console.log('skipping link, no series'+ '\n' + detailUrl);
-        return;
+        console.log('skipping link, no series');
         continue;
       }
 
@@ -123,7 +111,6 @@ linkloop:
       const dateGroups = rx_date.exec(detailHtml);
       if(dateGroups) {
         const dateTxt = dateGroups[1];
-        // console.log({dateTxt});
         if(dateTxt < '2000') {
           console.log(`skipping link, date ${dateTxt} is too old`);
           continue;
@@ -131,8 +118,7 @@ linkloop:
       }
       else {
         fs.writeFileSync('dbg-detail.html', detailHtml);
-        console.log('skipping link, no date'+ '\n' + detailUrl);
-        return;
+        console.log('skipping link, no date');
         continue;
       }
 
@@ -170,16 +156,11 @@ linkloop:
       fs.appendFileSync("links.txt", wikiUrl+'\n');
       fs.appendFileSync("links.txt", searchUrl+'\n');
 
-      console.log('opening page in browser');
+      console.log('opening detail page in browser');
       open(detailUrl);
       return;
-
-    } // end link loop
-
-    // console.log('skipping title, all links failed');
-
-  } // end show loop
-  
+    }
+  }
 })()
 
 function unEscape(htmlStr) {
