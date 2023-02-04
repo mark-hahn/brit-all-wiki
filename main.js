@@ -6,7 +6,6 @@ import {escape} from 'querystring';
 const useStoredHome = (process.argv[2] === 'useStoredHome');
 
 const rx_show    = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
-const rx_series  = new RegExp(`for="_blank">.*?TV Series.*?</label>`,'isg');
 const rx_dev     = new RegExp(`>In development: More at IMDbPro<`,'sg');
 const rx_date    = new RegExp(`tt_ov_rdat">(\\d\\d\\d\\d)`,'sg');
 const rx_proc    = new RegExp(`Procedural drama`,'sg');
@@ -95,24 +94,7 @@ linkloop:
       fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
 
 
-///////////////////////  SEARCH PAGE FILTER  /////////////////////
-
-      // rx_series.lastIndex = linkData.linkIdx;
-      // const seriesGroups = rx_series.exec(searchHtml);
-      // if(!seriesGroups) {
-      //   console.log('skipping link, not a tv series (off end)');
-      //   continue;
-      // }
-      // const seriesIdx = rx_series.lastIndex;
-      // const nextLinkIdx = 
-      //         (linkIdx < links.length-1 ? links[linkIdx+1].linkIdx : 1e9);
-      // if(seriesIdx >= nextLinkIdx) {
-      //   console.log('skipping link, not a tv-series (none before next)');
-      //   continue;
-      // }
-
-
-///////////////////////  DETAIL PAGE FILTERS  /////////////////////
+///////////////////////  FILTERS  /////////////////////
 
       const detailUrl = 'https://www.imdb.com' + relLink;
       // console.log('fetching detailed series page:', detailUrl);
@@ -121,8 +103,8 @@ linkloop:
       
       fs.writeFileSync('dbg-detail.html', detailHtml);
 
-      if(/tv series/i.test(detailHtml)) {
-        console.log('skipping link, no series');
+      if(!/tv series/igs.test(detailHtml)) {
+        console.log('skipping link, no series'+ '\n' + detailUrl);
         return;
         continue;
       }
@@ -137,6 +119,7 @@ linkloop:
         continue;
       }
 
+      rx_date.lastIndex = 0;
       const dateGroups = rx_date.exec(detailHtml);
       if(dateGroups) {
         const dateTxt = dateGroups[1];
@@ -149,8 +132,8 @@ linkloop:
       else {
         fs.writeFileSync('dbg-detail.html', detailHtml);
         console.log('skipping link, no date'+ '\n' + detailUrl);
-        // continue;
         return;
+        continue;
       }
 
       rx_genre.lastIndex = 0;
@@ -166,6 +149,7 @@ linkloop:
             genre.includes('game')                ||
             genre.includes('history')             ||
             genre.includes('home')                ||
+            genre.includes('horror')              ||
             genre.includes('garden')              ||
             genre.includes('lgbtq')               ||
             genre.includes('musical')             ||
@@ -174,7 +158,7 @@ linkloop:
             genre.includes('stand-up')            ||
             genre.includes('talk')                ||
             genre.includes('travel')) {
-          console.log('skipping link,', genre);
+          console.log('skipping link with genre,', genre);
           continue linkloop;
         }
       }
@@ -192,7 +176,7 @@ linkloop:
 
     } // end link loop
 
-    console.log('skipping title, all links failed');
+    // console.log('skipping title, all links failed');
 
   } // end show loop
   
