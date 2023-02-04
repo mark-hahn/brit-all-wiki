@@ -4,6 +4,7 @@ import open     from 'open';
 import {escape} from 'querystring';
 
 const useStoredHome = (process.argv[2] === 'useStoredHome');
+const dbg           = (process.argv[2] === 'debug');
 
 const rx_show    = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
 const rx_dev     = new RegExp(`>In development: More at IMDbPro<`,'sg');
@@ -42,7 +43,7 @@ else {
     if(title in oldShows) continue;
 
     oldShows[title] = true;
-    fs.writeFileSync("oldShows.json", JSON.stringify(oldShows));
+    if(!dbg) fs.writeFileSync("oldShows.json", JSON.stringify(oldShows));
 
     console.log(`\n--- ${title} ---`);
     
@@ -55,15 +56,22 @@ else {
     const searchResData = await fetch(searchUrl);
     const searchHtml    = await searchResData.text();
 
-    fs.writeFileSync('dbg-search.html', searchHtml);
+    if(dbg) fs.writeFileSync('dbg-search.html', searchHtml);
 
 
 ///////////////////////  LINKS  /////////////////////
 
     const escTitle = title.replace(/&/g, "&amp;")
-                          .replace(/'/g, "&#x27;");
-    const rx_relLink = 
-        new RegExp(`href="(/title/tt[^"]*)">${escTitle}</a>`,'sg');
+                          .replace(/'/g, "&#x27;")
+                          .replace(/\?/g, "\\?")
+                          .replace(/\*/g, "\\*")
+                          .replace(/\./g, "\\.")
+                          .replace(/\(/g, "\\(")
+                          .replace(/\)/g, "\\)")
+                          .replace(/\\/g, "\\");
+
+    const srchStr = `href="(/title/tt[^"]*)">${escTitle}</a>`;
+    const rx_relLink = new RegExp(srchStr,'isg');
 
     const links = [];
     rx_relLink.lastIndex = 0;
@@ -75,8 +83,12 @@ else {
     }
 
     if(links.length == 0) {
-        console.log('skipping title, no link');
-        continue;
+      console.log('skipping title, no search match');
+      if(dbg) {
+        console.log(srchStr);
+        return;
+      }
+      continue;
     }
 
 linkloop:
@@ -92,8 +104,13 @@ linkloop:
       
       fs.writeFileSync('dbg-detail.html', detailHtml);
 
-      if(!/tv series/igs.test(detailHtml)) {
-        console.log('skipping link, no series');
+      if(!/tv series/igs.test(detailHtml) &&
+         !/tv mini series/igs.test(detailHtml)) {
+        console.log('skipping link, not a series');
+        if(dbg) {
+          console.log(detailUrl);
+          return;
+        }
         continue;
       }
 
@@ -119,6 +136,10 @@ linkloop:
       else {
         fs.writeFileSync('dbg-detail.html', detailHtml);
         console.log('skipping link, no date');
+        if(dbg) {
+          console.log(detailUrl);
+          return;
+        }
         continue;
       }
 
@@ -148,18 +169,11 @@ linkloop:
           continue linkloop;
         }
       }
-
-      const wikiUrl = 
-        `https://en.wikipedia.org/wiki/${titleTVseries.replace(/ /g, '_')}`;
-
-      fs.writeFileSync("links.txt", 'run useStoredHome\n\n');
-      fs.appendFileSync("links.txt", wikiUrl+'\n');
-      fs.appendFileSync("links.txt", searchUrl+'\n');
-
       console.log('opening detail page in browser');
       open(detailUrl);
       return;
     }
+    if(dbg) return;
   }
 })()
 
