@@ -5,13 +5,12 @@ import {escape} from 'querystring';
 
 const useStoredHome = (process.argv[2] === 'useStoredHome');
 
-const rx_show   = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
-const rx_series = new RegExp(`for="_blank">.*?TV Series.*?</label>`,'isg');
-const rx_dev    = new RegExp(`>In development: More at IMDbPro<`,'sg');
-const rx_date   = new RegExp(`tt_ov_rdat">(\\d\\d\\d\\d).*?<`,'sg');
-const rx_proc   = new RegExp(`Procedural drama`,'sg');
-
-// /releaseinfo?ref_=tt_ov_rdat">2012–2018<
+const rx_show    = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
+const rx_series  = new RegExp(`for="_blank">.*?TV Series.*?</label>`,'isg');
+const rx_dev     = new RegExp(`>In development: More at IMDbPro<`,'sg');
+const rx_date    = new RegExp(`tt_ov_rdat">(\\d\\d\\d\\d)`,'sg');
+const rx_proc    = new RegExp(`Procedural drama`,'sg');
+const rx_genre   = new RegExp(`<span class="ipc-chip__text">(.*?)</span>`,'sg');
 
 const oldShows = JSON.parse(fs.readFileSync("oldShows.json"));
 const oldLinks = JSON.parse(fs.readFileSync("oldLinks.json"));
@@ -31,6 +30,9 @@ else {
   homeHtml = fs.readFileSync("home.html");
 }
 
+
+///////////////////////  SHOWS  /////////////////////
+
 (async () => {
   let show;
   rx_show.lastIndex = 0;
@@ -46,33 +48,44 @@ else {
     fs.writeFileSync("oldShows.json", JSON.stringify(oldShows));
 
     console.log(`\n--- ${title} ---`);
+    
 
-    const rx_relLink = 
-        new RegExp(`href="(/title/tt[^"]*)">${title}</a>`,'sg');
+///////////////////////  SEARCH  /////////////////////
 
-    const linkSearchUrl = 
+    const searchUrl = 
       `https://www.imdb.com/find/?q=${escape(title)}&ref_=nv_sr_sm`;
     
     // console.log('fetching imdb search results page');
-    const imdbSrchResData = await fetch(linkSearchUrl);
-    const imdbSrchResHtml = await imdbSrchResData.text();
+    const searchResData = await fetch(searchUrl);
+    const searchResHtml = await searchResData.text();
 
-    // fs.writeFileSync('imdbSrchResHtml.html', imdbSrchResHtml);
+    fs.writeFileSync('searchResHtml.html', searchResHtml);
+
+
+///////////////////////  LINKS  /////////////////////
+
+    const escTitle = title.replace(/&/g, "&amp;")
+                          .replace(/'/g, "&#x27;");
+    const rx_relLink = 
+        new RegExp(`href="(/title/tt[^"]*)">${escTitle}</a>`,'sg');
 
     const links = [];
     rx_relLink.lastIndex = 0;
     let relLinkGroups;
-    while((relLinkGroups = rx_relLink.exec(imdbSrchResHtml)) !== null) {
+    while((relLinkGroups = rx_relLink.exec(searchResHtml)) !== null) {
       const relLink = relLinkGroups[1];
       const linkIdx = rx_relLink.lastIndex;
       links.push({linkIdx, relLink});
     }
+
     if(links.length == 0) {
-        console.log('skipping, no detail link\n' + linkSearchUrl);
+        console.log('skipping title, no link\n' + searchUrl);
+        return;
         continue;
     }
     // console.log(links);
 
+linkloop:
     for(let linkIdx = 0; linkIdx < links.length; linkIdx++) {
       const linkData = links[linkIdx];
       const relLink = linkData.relLink;
@@ -81,39 +94,44 @@ else {
       oldLinks[relLink] = true;
       fs.writeFileSync("oldLinks.json", JSON.stringify(oldLinks));
 
+
+///////////////////////  SEARCH PAGE FILTER  /////////////////////
+
       rx_series.lastIndex = linkData.linkIdx;
-      const linkGroups = rx_series.exec(imdbSrchResHtml);
-      if(!linkGroups) {
-        console.log('skipping, not a tv series\n' + linkSearchUrl);
+      const seriesGroups = rx_series.exec(searchResHtml);
+      if(!seriesGroups) {
+        console.log('skipping link, not a tv series (off end)');
         continue;
       }
-
       const seriesIdx = rx_series.lastIndex;
       const nextLinkIdx = 
               (linkIdx < links.length-1 ? links[linkIdx+1].linkIdx : 1e9);
       if(seriesIdx >= nextLinkIdx) {
-        console.log('skipping detail link, not a tv-series');
+        console.log('skipping link, not a tv-series (none before next)');
         continue;
       }
 
+
+///////////////////////  DETAIL PAGE FILTERS  /////////////////////
+
       const detailUrl = 'https://www.imdb.com' + relLink;
-      // console.log('fetching imdb detailed series page:', detailUrl);
-      const imdbDetailResData = await fetch(detailUrl);
-      const imdbDetailHtml    = await imdbDetailResData.text();
+      // console.log('fetching detailed series page:', detailUrl);
+      const detailResData = await fetch(detailUrl);
+      const detailHtml    = await detailResData.text();
       
-      if(rx_dev.test(imdbDetailHtml)) {
+      fs.writeFileSync('detailHtml.html', detailHtml);
+
+      if(rx_dev.test(detailHtml)) {
         console.log('skipping link, in development');
         continue;
       }
 
-      if(rx_proc.test(imdbDetailHtml)) {
+      if(rx_proc.test(detailHtml)) {
         console.log('skipping link, procedural');
         continue;
       }
-      
-      // fs.writeFileSync('imdbDetailHtml.html', imdbDetailHtml);
-      
-      const dateGroups = rx_date.exec(imdbDetailHtml);
+
+      const dateGroups = rx_date.exec(detailHtml);
       if(dateGroups) {
         const dateTxt = dateGroups[1];
         // console.log({dateTxt});
@@ -123,9 +141,44 @@ else {
         }
       }
       else {
-        console.log('skipping link, no date');
-        continue;
+        fs.writeFileSync('detailHtml.html', detailHtml);
+        console.log('skipping link, no date'+ '\n');
+        // continue;
+        return;
       }
+
+      rx_genre.lastIndex = 0;
+      let genreGroups;
+      while((genreGroups = rx_genre.exec(detailHtml)) !== null) {
+        const genre = genreGroups[1].toLowerCase();
+        if( genre.includes('anime')               ||
+            genre.includes('biography')           ||
+            genre.includes('children')            ||
+            genre.includes('documentary')         ||
+            genre.includes('family')              ||
+            genre.includes('food')                ||
+            genre.includes('game')                ||
+            genre.includes('history')             ||
+            genre.includes('home')                ||
+            genre.includes('garden')              ||
+            genre.includes('lgbtq')               ||
+            genre.includes('musical')             ||
+            genre.includes('reality')             ||
+            genre.includes('sport')               ||
+            genre.includes('stand-up')            ||
+            genre.includes('talk')                ||
+            genre.includes('travel')) {
+          console.log('skipping link,', genre);
+          continue linkloop;
+        }
+      }
+
+      const wikiUrl = 
+        `https://en.wikipedia.org/wiki/${titleTVseries.replace(/ /g, '_')}`;
+
+      fs.writeFileSync("links.txt", 'run useStoredHome\n\n');
+      fs.appendFileSync("links.txt", wikiUrl+'\n');
+      fs.appendFileSync("links.txt", searchUrl+'\n');
 
       console.log('opening page in browser');
       open(detailUrl);
@@ -134,49 +187,6 @@ else {
     } // end link loop
 
     console.log('skipping title, all links failed');
-
-    // return;
-
-    // let wikiData;
-    // try {
-    //   wikiData = await fetch(showUrl);
-    // }
-    // catch(e) {
-    //   console.log(e.message + '\n\n');
-    //   process.exit();
-    // }
-
-    // const showHtml = await wikiData.text();
-    // let genreMatches;
-    // rx_genre.lastIndex = 0;
-    // while((genreMatches = rx_genre.exec(showHtml)) !== null) {
-    //   const genre = genreMatches[1];
-    //   if( genre === 'Anime'               ||
-    //       genre === 'Biography'           ||
-    //       genre === 'Children'            ||
-    //       genre === 'Documentary'         ||
-    //       genre === 'Family'              ||
-    //       genre === 'Food'                ||
-    //       genre === 'Game Show'           ||
-    //       genre === 'History'             ||
-    //       genre === 'Home &amp; Garden'   ||
-    //       genre === 'LGBTQ'               ||
-    //       genre === 'Musical'             ||
-    //       genre === 'Reality'             ||
-    //       genre === 'Sport'               ||
-    //       genre === 'Stand-up &amp; Talk' ||
-    //       genre === 'Travel') {
-    //     console.log('---- skipping', genre);
-    //     continue showLoop;
-    //   }
-    // }
-
-    const wikiUrl = 
-      `https://en.wikipedia.org/wiki/${titleTVseries.replace(/ /g, '_')}`;
-
-    fs.writeFileSync("links.txt", 'run useStoredHome\n\n');
-    fs.appendFileSync("links.txt", wikiUrl+'\n');
-    fs.appendFileSync("links.txt", linkSearchUrl+'\n');
 
   } // end show loop
   
