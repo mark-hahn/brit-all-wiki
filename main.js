@@ -39,7 +39,7 @@ else {
   while((show = rx_show.exec(homeHtml)) !== null) {
 
     const titleTVseries = unEscape(show[1]);
-    const title = titleTVseries.replace(/ \(.*?TV series\)/i, '');
+    const title = titleTVseries.replace(/ \(.*?\)$/i, '');
 
     // console.log(title);
     if(title in oldShows) continue;
@@ -57,9 +57,9 @@ else {
     
     // console.log('fetching imdb search results page');
     const searchResData = await fetch(searchUrl);
-    const searchResHtml = await searchResData.text();
+    const searchHtml    = await searchResData.text();
 
-    fs.writeFileSync('searchResHtml.html', searchResHtml);
+    fs.writeFileSync('dbg-search.html', searchHtml);
 
 
 ///////////////////////  LINKS  /////////////////////
@@ -72,7 +72,7 @@ else {
     const links = [];
     rx_relLink.lastIndex = 0;
     let relLinkGroups;
-    while((relLinkGroups = rx_relLink.exec(searchResHtml)) !== null) {
+    while((relLinkGroups = rx_relLink.exec(searchHtml)) !== null) {
       const relLink = relLinkGroups[1];
       const linkIdx = rx_relLink.lastIndex;
       links.push({linkIdx, relLink});
@@ -97,19 +97,19 @@ linkloop:
 
 ///////////////////////  SEARCH PAGE FILTER  /////////////////////
 
-      rx_series.lastIndex = linkData.linkIdx;
-      const seriesGroups = rx_series.exec(searchResHtml);
-      if(!seriesGroups) {
-        console.log('skipping link, not a tv series (off end)');
-        continue;
-      }
-      const seriesIdx = rx_series.lastIndex;
-      const nextLinkIdx = 
-              (linkIdx < links.length-1 ? links[linkIdx+1].linkIdx : 1e9);
-      if(seriesIdx >= nextLinkIdx) {
-        console.log('skipping link, not a tv-series (none before next)');
-        continue;
-      }
+      // rx_series.lastIndex = linkData.linkIdx;
+      // const seriesGroups = rx_series.exec(searchHtml);
+      // if(!seriesGroups) {
+      //   console.log('skipping link, not a tv series (off end)');
+      //   continue;
+      // }
+      // const seriesIdx = rx_series.lastIndex;
+      // const nextLinkIdx = 
+      //         (linkIdx < links.length-1 ? links[linkIdx+1].linkIdx : 1e9);
+      // if(seriesIdx >= nextLinkIdx) {
+      //   console.log('skipping link, not a tv-series (none before next)');
+      //   continue;
+      // }
 
 
 ///////////////////////  DETAIL PAGE FILTERS  /////////////////////
@@ -119,7 +119,13 @@ linkloop:
       const detailResData = await fetch(detailUrl);
       const detailHtml    = await detailResData.text();
       
-      fs.writeFileSync('detailHtml.html', detailHtml);
+      fs.writeFileSync('dbg-detail.html', detailHtml);
+
+      if(/tv series/i.test(detailHtml)) {
+        console.log('skipping link, no series');
+        return;
+        continue;
+      }
 
       if(rx_dev.test(detailHtml)) {
         console.log('skipping link, in development');
@@ -141,8 +147,8 @@ linkloop:
         }
       }
       else {
-        fs.writeFileSync('detailHtml.html', detailHtml);
-        console.log('skipping link, no date'+ '\n');
+        fs.writeFileSync('dbg-detail.html', detailHtml);
+        console.log('skipping link, no date'+ '\n' + detailUrl);
         // continue;
         return;
       }
