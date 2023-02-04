@@ -9,7 +9,6 @@ const dbg           = (process.argv[2] === 'debug');
 const rx_show    = new RegExp(`<li><i><a href="/wiki/.*?" title="(.*?)">`, 'sg');
 const rx_dev     = new RegExp(`>In development: More at IMDbPro<`,'sg');
 const rx_date    = new RegExp(`tt_ov_rdat">(\\d\\d\\d\\d)`,'sg');
-const rx_proc    = new RegExp(`Procedural drama`,'sg');
 const rx_genre   = new RegExp(`<span class="ipc-chip__text">(.*?)</span>`,'sg');
 
 const oldShows = JSON.parse(fs.readFileSync("oldShows.json"));
@@ -119,7 +118,7 @@ linkloop:
         continue;
       }
 
-      if(rx_proc.test(detailHtml)) {
+      if(/procedural/gsi.test(detailHtml)) {
         console.log('skipping link, procedural');
         continue;
       }
