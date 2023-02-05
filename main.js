@@ -127,7 +127,7 @@ linkloop:
       const dateGroups = rx_date.exec(detailHtml);
       if(dateGroups) {
         const dateTxt = dateGroups[1];
-        if(dateTxt < '2000') {
+        if(dateTxt < '1995') {
           console.log(`skipping link, date ${dateTxt} is too old`);
           continue;
         }
@@ -155,7 +155,6 @@ linkloop:
             genre.includes('game')                ||
             genre.includes('history')             ||
             genre.includes('home')                ||
-            genre.includes('horror')              ||
             genre.includes('garden')              ||
             genre.includes('lgbtq')               ||
             genre.includes('musical')             ||
